@@ -231,7 +231,11 @@ void verbs_register_driver(const struct verbs_device_ops *ops)
 
 	driver->ops = ops;
 
-	list_add_tail(&driver_list, &driver->entry);
+	if (!strcmp(ops->name, "rxe")) {
+		list_add(&driver_list, &driver->entry);
+	} else {
+		list_add_tail(&driver_list, &driver->entry);
+	}
 }
 
 /* Match a single modalias value */
