@@ -48,6 +48,8 @@ IBVERBS_1.0 {
 		ibv_get_sysfs_path;
 		ibv_read_sysfs_file;
 
+		ibv_reopen_device;
+		ibv_dump_context;
 	local: *;
 };
 
@@ -104,6 +106,10 @@ IBVERBS_1.1 {
 		/* These historical symbols are now private to libibverbs, but used by
 		   other rdma-core libraries. Do not change them. */
 		ibv_copy_ah_attr_from_kern;
+
+    ibv_reopen_device;
+		ibv_dump_context;
+		ibv_restore_object;
 } IBVERBS_1.0;
 
 IBVERBS_1.5 {
@@ -201,4 +207,8 @@ IBVERBS_PRIVATE_@IBVERBS_PABI_VERSION@ {
 		verbs_uninit_context;
 		verbs_init_cq;
 		ibv_cmd_modify_cq;
+
+    verbs_reopen_device;
+		ibv_cmd_dump_context;
+		ibv_cmd_restore_object;
 };

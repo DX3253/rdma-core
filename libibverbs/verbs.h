@@ -1233,6 +1233,48 @@ struct ibv_qp {
 	uint32_t		events_completed;
 };
 
+struct vm_range {
+	uint64_t	vm_start;
+	uint64_t	vm_size;
+};
+
+enum ibv_restore_cq_cmd {
+	IBV_RESTORE_CQ_CREATE,
+	IBV_RESTORE_CQ_REFILL,
+};
+
+struct ibv_restore_cq {
+	/* In arguments */
+	uint32_t		cqe;
+	struct ibv_comp_channel *channel;
+	uint32_t		comp_vector;
+	struct vm_range		queue;
+};
+
+
+enum ibv_restore_qp_cmd {
+	IBV_RESTORE_QP_CREATE,
+	IBV_RESTORE_QP_REFILL,
+};
+
+struct ibv_restore_qp {
+	/* In arguments */
+	struct ibv_pd		*pd;
+	struct ibv_qp_init_attr	attr;
+	struct vm_range 	rq;
+	struct vm_range 	sq;
+};
+
+enum ibv_restore_mr_cmd {
+	IBV_RESTORE_MR_KEYS,
+};
+
+struct ibv_restore_mr {
+	struct ibv_mr	*mr;
+	uint32_t lkey;
+	uint32_t rkey;
+};
+
 struct ibv_qp_ex {
 	struct ibv_qp qp_base;
 	uint64_t comp_mask;
@@ -1932,6 +1974,9 @@ struct ibv_context_ops {
 	void *(*_compat_attach_mcast)(void);
 	void *(*_compat_detach_mcast)(void);
 	void *(*_compat_async_event)(void);
+
+	void *(*_compat_dump_context)(void);
+	void *(*_compat_restore_object)(void);
 };
 
 struct ibv_context {
@@ -2299,6 +2344,24 @@ struct ibv_pd *ibv_alloc_pd(struct ibv_context *context);
  * ibv_dealloc_pd - Free a protection domain
  */
 int ibv_dealloc_pd(struct ibv_pd *pd);
+
+/**
+ * ibv_reopen_device - Reopen device for dumping
+ */
+struct ibv_context *ibv_reopen_device(struct ibv_device *device, int cmd_fd);
+
+/**
+ * ibv_alloc_pd - Dump existing protection domains
+ */
+int ibv_dump_context(struct ibv_context *context, int *count,
+		     void *dump, size_t length);
+
+/**
+ * ibv_restore_object - Restore ibverbs object in a driver specific way
+ */
+int ibv_restore_object(struct ibv_context *context, void **object,
+		       int object_type, int cmd,
+		       void *args, size_t length);
 
 static inline struct ibv_flow *ibv_create_flow(struct ibv_qp *qp,
 					       struct ibv_flow_attr *flow)

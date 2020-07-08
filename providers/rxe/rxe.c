@@ -45,6 +45,10 @@
 #include <sys/mman.h>
 #include <errno.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <endian.h>
 #include <pthread.h>
 #include <stddef.h>
@@ -124,6 +128,56 @@ static int rxe_dealloc_pd(struct ibv_pd *pd)
 	return ret;
 }
 
+static int rxe_dump_context(struct ibv_context *context, int *count,
+			    void *dump, size_t length)
+{
+	int ret;
+	struct ibv_dump_context cmd;
+	struct ib_uverbs_dump_context_resp *resp;
+
+	if (sizeof(*resp) > length) {
+		return ENOMEM;
+	}
+
+	cmd.skip = 0;
+	ret = ibv_cmd_dump_context(context, &cmd, sizeof cmd, dump, length);
+	if (ret) {
+		return ret;
+	}
+
+	resp = dump;
+
+	*count = resp->total;
+
+	length -= offsetof(struct ib_uverbs_dump_context_resp, driver_data);
+	memmove(dump, &resp->driver_data, length);
+
+	return 0;
+}
+
+static int rxe_restore_cq(struct ibv_context *context, struct ibv_cq **cq,
+			  int cmd, struct ibv_restore_cq *args, size_t length);
+static int rxe_restore_qp(struct ibv_context *context, struct ibv_qp **qp,
+			  int cmd, void *args, size_t length);
+static int rxe_restore_mr(struct ibv_context *context, struct ibv_mr **mr,
+			  int cmd, struct ibv_restore_mr *args, size_t length);
+
+static int rxe_restore_object(struct ibv_context *context,
+			      void **object, int object_type,
+			      int cmd, void *args, size_t length)
+{
+	switch (object_type) {
+	case IB_UVERBS_OBJECT_CQ:
+		return rxe_restore_cq(context, (struct ibv_cq **)object, cmd, args, length);
+	case IB_UVERBS_OBJECT_QP:
+		return rxe_restore_qp(context, (struct ibv_qp **)object, cmd, args, length);
+        case IB_UVERBS_OBJECT_MR:
+		return rxe_restore_mr(context, (struct ibv_mr **)object, cmd, args, length);
+	default:
+		return ENOTSUP;
+	}
+}
+
 static struct ibv_mr *rxe_reg_mr(struct ibv_pd *pd, void *addr, size_t length,
 				 uint64_t hca_va, int access)
 {
@@ -191,6 +245,97 @@ static struct ibv_cq *rxe_create_cq(struct ibv_context *context, int cqe,
 	pthread_spin_init(&cq->lock, PTHREAD_PROCESS_PRIVATE);
 
 	return &cq->ibv_cq;
+}
+
+static int rxe_restore_cq_create(struct ibv_context *context, struct ibv_cq **cq,
+				 struct ibv_restore_cq *args, size_t length)
+{
+	struct rxe_cq *rcq;
+	struct urxe_create_cq_resp resp;
+	int ret;
+
+	if (length != sizeof(*args)) {
+		return -EINVAL;
+	}
+
+	rcq = malloc(sizeof *rcq);
+	if (!rcq) {
+		return -ENOMEM;
+	}
+
+	ret = ibv_cmd_create_cq(context, args->cqe, args->channel,
+				args->comp_vector,
+				&rcq->ibv_cq, NULL, 0,
+				&resp.ibv_resp, sizeof resp);
+	if (ret) {
+		free(rcq);
+		return -1;
+	}
+
+	if (resp.mi.size != args->queue.vm_size) {
+		ibv_cmd_destroy_cq(&rcq->ibv_cq);
+		free(rcq);
+		return -EINVAL;
+	}
+
+	printf(">> CREATE_CQ MAP: size %x prot %x, flag %x, fd %x offs %llx\n",
+	       resp.mi.size, PROT_READ | PROT_WRITE, MAP_SHARED,
+	       context->cmd_fd, resp.mi.offset);
+	rcq->queue = mmap((void *)args->queue.vm_start, args->queue.vm_size,
+			 PROT_READ | PROT_WRITE, MAP_SHARED,
+			 context->cmd_fd, resp.mi.offset);
+	if ((void *)rcq->queue == MAP_FAILED) {
+		ibv_cmd_destroy_cq(&rcq->ibv_cq);
+		free(rcq);
+		return -1;
+	}
+
+	rcq->mmap_info = resp.mi;
+	pthread_spin_init(&rcq->lock, PTHREAD_PROCESS_PRIVATE);
+
+	*cq = &rcq->ibv_cq;
+	return 0;
+}
+
+static int rxe_restore_cq_refill(struct ibv_context *context, struct ibv_cq **cq,
+				 struct ibv_restore_cq *args, size_t length)
+{
+	int ret;
+	struct ibv_restore_object *cmd = NULL;
+	size_t cmd_len = sizeof(*cmd) + length;
+
+	cmd = malloc(cmd_len);
+	if (!cmd) {
+		return -ENOMEM;
+	}
+
+	cmd->core_payload = (struct ib_uverbs_restore_object){
+		.handle = (*cq)->handle,
+		.object_type = IB_UVERBS_OBJECT_CQ,
+		.cmd = IBV_RESTORE_CQ_REFILL,
+	};
+
+	memmove(&cmd->driver_data, args, length);
+
+	ret = ibv_cmd_restore_object(context, cmd, cmd_len);
+
+	printf("CQ REFILL %d len %ld %ld\n", ret, cmd_len, sizeof(*cmd));
+	free(cmd);
+
+	return ret;
+}
+
+static int rxe_restore_cq(struct ibv_context *context, struct ibv_cq **cq,
+			  int cmd, struct ibv_restore_cq *args, size_t length)
+{
+	switch (cmd) {
+	case IBV_RESTORE_CQ_CREATE:
+		return rxe_restore_cq_create(context, cq, args, length);
+	case IBV_RESTORE_CQ_REFILL:
+		return rxe_restore_cq_refill(context, cq, args, length);
+	default:
+		return -EINVAL;
+	}
 }
 
 static int rxe_resize_cq(struct ibv_cq *ibcq, int cqe)
@@ -492,6 +637,154 @@ static struct ibv_qp *rxe_create_qp(struct ibv_pd *pd,
 	pthread_spin_init(&qp->sq.lock, PTHREAD_PROCESS_PRIVATE);
 
 	return &qp->ibv_qp;
+}
+
+static int rxe_restore_qp_create(struct ibv_context *context, struct ibv_qp **qp,
+				 struct ibv_restore_qp *args, size_t length)
+{
+	struct ibv_create_qp cmd;
+	struct urxe_create_qp_resp resp;
+	struct rxe_qp *rqp;
+	int ret;
+
+	rqp = malloc(sizeof *rqp);
+	if (!rqp) {
+		return -1;
+	}
+
+	ret = ibv_cmd_create_qp(args->pd, &rqp->ibv_qp, &args->attr, &cmd, sizeof cmd,
+				&resp.ibv_resp, sizeof resp);
+	if (ret) {
+		free(rqp);
+		return -1;
+	}
+
+	if (args->attr.srq) {
+		rqp->rq.max_sge = 0;
+		rqp->rq.queue = NULL;
+		rqp->rq_mmap_info.size = 0;
+	} else {
+		rqp->rq.max_sge = args->attr.cap.max_recv_sge;
+
+		if (args->rq.vm_size != resp.rq_mi.size) {
+			return -1;
+		}
+
+		rqp->rq.queue = mmap((void *)args->rq.vm_start, args->rq.vm_size,
+				     PROT_READ | PROT_WRITE, MAP_SHARED,
+				     args->pd->context->cmd_fd, resp.rq_mi.offset);
+		if ((void *)rqp->rq.queue == MAP_FAILED) {
+			ibv_cmd_destroy_qp(&rqp->ibv_qp);
+			free(rqp);
+			return -1;
+		}
+
+		rqp->rq_mmap_info = resp.rq_mi;
+		pthread_spin_init(&rqp->rq.lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	rqp->sq.max_sge = args->attr.cap.max_send_sge;
+	rqp->sq.max_inline = args->attr.cap.max_inline_data;
+
+	if (args->sq.vm_size != resp.sq_mi.size) {
+		return -1;
+	}
+
+	rqp->sq.queue = mmap((void *)args->sq.vm_start, args->sq.vm_size,
+			     PROT_READ | PROT_WRITE, MAP_SHARED,
+			     args->pd->context->cmd_fd, resp.sq_mi.offset);
+	if ((void *)rqp->sq.queue == MAP_FAILED) {
+		if (rqp->rq_mmap_info.size)
+			munmap(rqp->rq.queue, rqp->rq_mmap_info.size);
+		ibv_cmd_destroy_qp(&rqp->ibv_qp);
+		free(rqp);
+		return -1;
+	}
+
+	rqp->sq_mmap_info = resp.sq_mi;
+	pthread_spin_init(&rqp->sq.lock, PTHREAD_PROCESS_PRIVATE);
+
+	*qp = &rqp->ibv_qp;
+	return 0;
+}
+
+static int rxe_restore_qp_refill(struct ibv_context *context, struct ibv_qp **qp,
+				 struct ibv_restore_qp *args, size_t length)
+{
+	int ret;
+	struct ibv_restore_object *cmd = NULL;
+	size_t cmd_len = sizeof(*cmd) + length;
+
+	cmd = malloc(cmd_len);
+	if (!cmd) {
+		return -ENOMEM;
+	}
+
+	cmd->core_payload = (struct ib_uverbs_restore_object){
+		.handle = (*qp)->handle,
+		.object_type = IB_UVERBS_OBJECT_QP,
+		.cmd = IBV_RESTORE_QP_REFILL,
+	};
+
+	memmove(&cmd->driver_data, args, length);
+
+	ret = ibv_cmd_restore_object(context, cmd, cmd_len);
+
+	printf("QP REFILL %d len %ld %ld\n", ret, cmd_len, sizeof(*cmd));
+	free(cmd);
+
+	return ret;
+}
+
+static int rxe_restore_qp(struct ibv_context *context,  struct ibv_qp **qp,
+			  int cmd, void *args, size_t length)
+{
+	switch (cmd) {
+	case IBV_RESTORE_QP_CREATE:
+		return rxe_restore_qp_create(context, qp, args, length);
+	case IBV_RESTORE_QP_REFILL:
+		return rxe_restore_qp_refill(context, qp, args, length);
+	default:
+		return -EINVAL;
+	}
+}
+
+static int rxe_restore_mr_keys(struct ibv_context *context, struct ibv_mr **mr,
+				 struct ibv_restore_mr *args, size_t length)
+{
+	int ret;
+	struct ibv_restore_object *cmd = NULL;
+	size_t cmd_len = sizeof(*cmd) + length;
+
+	cmd = malloc(cmd_len);
+	if (!cmd) {
+		return -ENOMEM;
+	}
+
+	cmd->core_payload = (struct ib_uverbs_restore_object){
+		.handle = (*mr)->handle,
+		.object_type = IB_UVERBS_OBJECT_MR,
+		.cmd = IBV_RESTORE_MR_KEYS,
+	};
+
+	memmove(&cmd->driver_data, args, length);
+
+	ret = ibv_cmd_restore_object(context, cmd, cmd_len);
+
+	printf("MR KEYS %d lkey %d rkey %d\n", ret, args->lkey, args->rkey);
+
+	return ret;
+}
+
+static int rxe_restore_mr(struct ibv_context *context, struct ibv_mr **mr,
+			  int cmd, struct ibv_restore_mr *args, size_t length)
+{
+	switch (cmd) {
+	case IBV_RESTORE_MR_KEYS:
+		return rxe_restore_mr_keys(context, mr, args, length);
+	default:
+		return -EINVAL;
+	}
 }
 
 static int rxe_query_qp(struct ibv_qp *qp, struct ibv_qp_attr *attr,
@@ -860,6 +1153,8 @@ static const struct verbs_context_ops rxe_ctx_ops = {
 	.attach_mcast = ibv_cmd_attach_mcast,
 	.detach_mcast = ibv_cmd_detach_mcast,
 	.free_context = rxe_free_context,
+	.dump_context = rxe_dump_context,
+	.restore_object = rxe_restore_object,
 };
 
 static struct verbs_context *rxe_alloc_context(struct ibv_device *ibdev,
@@ -875,9 +1170,11 @@ static struct verbs_context *rxe_alloc_context(struct ibv_device *ibdev,
 	if (!context)
 		return NULL;
 
-	if (ibv_cmd_get_context(&context->ibv_ctx, &cmd,
-				sizeof cmd, &resp, sizeof resp))
-		goto out;
+	if (!private_data) {
+		if (ibv_cmd_get_context(&context->ibv_ctx, &cmd,
+					sizeof cmd, &resp, sizeof resp))
+			goto out;
+	}
 
 	verbs_set_ops(&context->ibv_ctx, &rxe_ctx_ops);
 

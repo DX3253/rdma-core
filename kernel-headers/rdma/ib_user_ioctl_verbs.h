@@ -207,4 +207,217 @@ enum rdma_driver_id {
 	RDMA_DRIVER_SIW,
 };
 
+enum ib_uverbs_objects_types {
+	IB_UVERBS_OBJECT_DEVICE, /* No instances of DEVICE are allowed */
+	IB_UVERBS_OBJECT_PD,
+	IB_UVERBS_OBJECT_COMP_CHANNEL,
+	IB_UVERBS_OBJECT_CQ,
+	IB_UVERBS_OBJECT_QP,
+	IB_UVERBS_OBJECT_SRQ,
+	IB_UVERBS_OBJECT_AH,
+	IB_UVERBS_OBJECT_MR,
+	IB_UVERBS_OBJECT_MW,
+	IB_UVERBS_OBJECT_FLOW,
+	IB_UVERBS_OBJECT_XRCD,
+	IB_UVERBS_OBJECT_RWQ_IND_TBL,
+	IB_UVERBS_OBJECT_WQ,
+	IB_UVERBS_OBJECT_FLOW_ACTION,
+	IB_UVERBS_OBJECT_DM,
+	IB_UVERBS_OBJECT_COUNTERS,
+	IB_UVERBS_OBJECT_TOTAL,
+};
+
+struct rxe_dump_queue {
+	__u32	log2_elem_size;
+	__u32	index_mask;
+	__u32	producer_index;
+	__u32	consumer_index;
+} __attribute__((packed));
+
+struct rxe_dump_qp {
+	struct rxe_dump_queue	sq;
+	struct rxe_dump_queue	rq;
+	__u32			wqe_index;
+	__u32			req_opcode;
+	__u32			comp_psn;
+	__u32			comp_opcode;
+	__u32			msn;
+	__u32			resp_opcode;
+} __attribute__((packed));
+
+struct ib_uverbs_dump_object {
+	/* Set by generic code */
+	__u32 type;
+	__u32 size;
+	__u32 handle;
+} __attribute__((packed));
+
+struct ib_uverbs_dump_object_pd {
+	struct ib_uverbs_dump_object obj;
+} __attribute__((packed));
+
+struct rxe_dump_mr {
+	__u32 lkey;
+	__u32 rkey;
+	__u32 mrn;
+};
+
+struct ib_uverbs_dump_object_mr {
+	struct ib_uverbs_dump_object obj;
+
+	/* Set by driver specific code  */
+	__u64 address;
+	__u64 length;
+	__u32 access;
+
+	/* Set by generic code */
+	__u32 pd_handle;
+	__u32 lkey;
+	__u32 rkey;
+
+	struct rxe_dump_mr rxe;
+} __attribute__((packed));
+
+struct ib_uverbs_dump_object_cq {
+	struct ib_uverbs_dump_object obj;
+
+	/* Set by driver specific code */
+	__u64 vm_start;
+	__u64 vm_size;
+	__u32 comp_vector;
+
+	/* Set by generic code */
+	__u32 cqe;
+	__u32 comp_channel;
+
+	struct rxe_dump_queue rxe;
+} __attribute__((packed));
+
+enum ib_qp_state {
+	IB_QPS_RESET,
+	IB_QPS_INIT,
+	IB_QPS_RTR,
+	IB_QPS_RTS,
+	IB_QPS_SQD,
+	IB_QPS_SQE,
+	IB_QPS_ERR
+};
+
+enum ib_mtu {
+	IB_MTU_256  = 1,
+	IB_MTU_512  = 2,
+	IB_MTU_1024 = 3,
+	IB_MTU_2048 = 4,
+	IB_MTU_4096 = 5
+};
+
+enum ib_mig_state {
+	IB_MIG_MIGRATED,
+	IB_MIG_REARM,
+	IB_MIG_ARMED
+};
+
+struct ib_qp_cap {
+	__u32	max_send_wr;
+	__u32	max_recv_wr;
+	__u32	max_send_sge;
+	__u32	max_recv_sge;
+	__u32	max_inline_data;
+
+	/*
+	 * Maximum number of rdma_rw_ctx structures in flight at a time.
+	 * ib_create_qp() will calculate the right amount of neededed WRs
+	 * and MRs based on this.
+	 */
+	__u32	max_rdma_ctxs;
+} __attribute__((packed));
+
+enum ib_qp_type {
+	/*
+	 * IB_QPT_SMI and IB_QPT_GSI have to be the first two entries
+	 * here (and in that order) since the MAD layer uses them as
+	 * indices into a 2-entry table.
+	 */
+	IB_QPT_SMI,
+	IB_QPT_GSI,
+
+	IB_QPT_RC,
+	IB_QPT_UC,
+	IB_QPT_UD,
+	IB_QPT_RAW_IPV6,
+	IB_QPT_RAW_ETHERTYPE,
+	IB_QPT_RAW_PACKET = 8,
+	IB_QPT_XRC_INI = 9,
+	IB_QPT_XRC_TGT,
+	IB_QPT_MAX,
+	IB_QPT_DRIVER = 0xFF,
+	/* Reserve a range for qp types internal to the low level driver.
+	 * These qp types will not be visible at the IB core layer, so the
+	 * IB_QPT_MAX usages should not be affected in the core layer
+	 */
+	IB_QPT_RESERVED1 = 0x1000,
+	IB_QPT_RESERVED2,
+	IB_QPT_RESERVED3,
+	IB_QPT_RESERVED4,
+	IB_QPT_RESERVED5,
+	IB_QPT_RESERVED6,
+	IB_QPT_RESERVED7,
+	IB_QPT_RESERVED8,
+	IB_QPT_RESERVED9,
+	IB_QPT_RESERVED10,
+};
+
+struct ib_qp_dump_attr {
+	enum ib_qp_state		qp_state;
+	enum ib_mtu			path_mtu;
+	enum ib_mig_state		path_mig_state;
+	__u32				qkey;
+	__u32				rq_psn;
+	__u32				sq_psn;
+	__u32				dest_qp_num;
+	__u32				qp_access_flags;
+	struct ib_qp_cap		cap;
+	struct ib_uverbs_ah_attr	ah_attr;
+	struct ib_uverbs_ah_attr	alt_ah_attr;
+	__u16				pkey_index;
+	__u16				alt_pkey_index;
+	__u8				en_sqd_async_notify;
+	__u8				sq_draining;
+	__u8				max_rd_atomic;
+	__u8				max_dest_rd_atomic;
+	__u8				min_rnr_timer;
+	__u8				port_num;
+	__u8				timeout;
+	__u8				retry_cnt;
+	__u8				rnr_retry;
+	__u8				alt_port_num;
+	__u8				alt_timeout;
+	__u32				rate_limit;
+} __attribute__((packed));
+
+struct ib_uverbs_dump_object_qp {
+	struct ib_uverbs_dump_object obj;
+
+	/* Set by driver specific code */
+	__u64 rq_start;
+	__u64 rq_size;
+
+	__u64 sq_start;
+	__u64 sq_size;
+
+	/* Set by generic code */
+	__u32 pd_handle;
+	__u32 scq_handle;
+	__u32 rcq_handle;
+	__u32 srq_handle;
+
+	__u32 qp_type;
+	__u32 sq_sig_all;
+	__u32 qp_num;
+
+	struct ib_qp_dump_attr attr;
+
+	struct rxe_dump_qp rxe;
+} __attribute__((packed));
+
 #endif

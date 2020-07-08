@@ -367,6 +367,36 @@ LATEST_SYMVER_FUNC(ibv_open_device, 1_1, "IBVERBS_1.1",
 	return verbs_open_device(device, NULL);
 }
 
+struct ibv_context *verbs_reopen_device(struct ibv_device *device, int cmd_fd, void *private_data)
+{
+	struct verbs_device *verbs_device = verbs_get_device(device);
+	struct verbs_context *context_ex;
+
+	if (cmd_fd < 0)
+		return NULL;
+
+	/*
+	 * cmd_fd ownership is transferred into alloc_context, if it fails
+	 * then it closes cmd_fd and returns NULL
+	 */
+  /* XXX: that is a dirty hack */
+  int dummy_data;
+	context_ex = verbs_device->ops->alloc_context(device, cmd_fd, &dummy_data);
+	if (!context_ex)
+		return NULL;
+
+	set_lib_ops(context_ex);
+
+	return &context_ex->context;
+}
+
+LATEST_SYMVER_FUNC(ibv_reopen_device, 1_1, "IBVERBS_1.1",
+                   struct ibv_context *,
+                   struct ibv_device *device, int cmd_fd)
+{
+	return verbs_reopen_device(device, cmd_fd, NULL);
+}
+
 void verbs_uninit_context(struct verbs_context *context_ex)
 {
 	free(context_ex->priv);

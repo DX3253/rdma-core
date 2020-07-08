@@ -190,6 +190,8 @@ DECLARE_CMD(IB_USER_VERBS_CMD_DESTROY_CQ, ibv_destroy_cq, ib_uverbs_destroy_cq);
 DECLARE_CMD(IB_USER_VERBS_CMD_DESTROY_QP, ibv_destroy_qp, ib_uverbs_destroy_qp);
 DECLARE_CMD(IB_USER_VERBS_CMD_DESTROY_SRQ, ibv_destroy_srq, ib_uverbs_destroy_srq);
 DECLARE_CMDX(IB_USER_VERBS_CMD_DETACH_MCAST, ibv_detach_mcast, ib_uverbs_detach_mcast, empty);
+DECLARE_CMD(IB_USER_VERBS_CMD_DUMP_CONTEXT, ibv_dump_context, ib_uverbs_dump_context);
+DECLARE_CMDX(IB_USER_VERBS_CMD_RESTORE_OBJECT, ibv_restore_object, ib_uverbs_restore_object, empty);
 DECLARE_CMD(IB_USER_VERBS_CMD_GET_CONTEXT, ibv_get_context, ib_uverbs_get_context);
 DECLARE_CMDX(IB_USER_VERBS_CMD_MODIFY_QP, ibv_modify_qp, ib_uverbs_modify_qp, empty);
 DECLARE_CMDX(IB_USER_VERBS_CMD_MODIFY_SRQ, ibv_modify_srq, ib_uverbs_modify_srq, empty);

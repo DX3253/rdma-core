@@ -296,6 +296,31 @@ LATEST_SYMVER_FUNC(ibv_dealloc_pd, 1_1, "IBVERBS_1.1",
 	return get_ops(pd->context)->dealloc_pd(pd);
 }
 
+LATEST_SYMVER_FUNC(ibv_dump_context, 1_1, "IBVERBS_1.1",
+                   int,
+                   struct ibv_context *context,
+		   int *count, void *dump, size_t length)
+{
+	int ret;
+
+	ret = get_ops(context)->dump_context(context, count, dump, length);
+
+	return ret;
+}
+
+LATEST_SYMVER_FUNC(ibv_restore_object, 1_1, "IBVERBS_1.1",
+                   int,
+                   struct ibv_context *context,
+		   void **object, int object_type,
+		   int cmd, void *args, size_t length)
+{
+	int ret;
+
+	ret = get_ops(context)->restore_object(context, object, object_type, cmd, args, length);
+
+	return ret;
+}
+
 #undef ibv_reg_mr
 LATEST_SYMVER_FUNC(ibv_reg_mr, 1_1, "IBVERBS_1.1",
 		   struct ibv_mr *,

@@ -368,6 +368,12 @@ struct verbs_context_ops {
 	int (*rereg_mr)(struct verbs_mr *vmr, int flags, struct ibv_pd *pd,
 			void *addr, size_t length, int access);
 	int (*resize_cq)(struct ibv_cq *cq, int cqe);
+
+	int (*dump_context)(struct ibv_context *context, int *count,
+			    void *dump, size_t length);
+	int (*restore_object)(struct ibv_context *context,
+			      void **object, int object_type,
+			      int cmd, void *dump, size_t length);
 };
 
 static inline struct verbs_device *
@@ -428,6 +434,9 @@ void verbs_init_cq(struct ibv_cq *cq, struct ibv_context *context,
 
 struct ibv_context *verbs_open_device(struct ibv_device *device,
 				      void *private_data);
+struct ibv_context *verbs_reopen_device(struct ibv_device *device,
+                                        int cmd_fd,
+                                        void *private_data);
 int ibv_cmd_get_context(struct verbs_context *context,
 			struct ibv_get_context *cmd, size_t cmd_size,
 			struct ib_uverbs_get_context_resp *resp, size_t resp_size);
@@ -618,6 +627,12 @@ int ibv_cmd_reg_dm_mr(struct ibv_pd *pd, struct verbs_dm *dm,
 		      uint64_t offset, size_t length,
 		      unsigned int access, struct verbs_mr *vmr,
 		      struct ibv_command_buffer *link);
+
+int ibv_cmd_dump_context(struct ibv_context *context,
+			 struct ibv_dump_context *cmd, size_t cmd_size,
+			 struct ib_uverbs_dump_context_resp *resp, size_t resp_size);
+int ibv_cmd_restore_object(struct ibv_context *context,
+			   struct ibv_restore_object *cmd, size_t cmd_size);
 
 /*
  * sysfs helper functions

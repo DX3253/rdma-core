@@ -277,6 +277,18 @@ static void free_context(struct ibv_context *ctx)
 	return;
 }
 
+static int dump_context(struct ibv_context *context, int *count, void *dump, size_t length)
+{
+	return ENOSYS;
+}
+
+static int restore_object(struct ibv_context *context,
+			  void **object, int object_type,
+			  int cmd, void *args, size_t length)
+{
+	return ENOSYS;
+}
+
 static int free_dm(struct ibv_dm *dm)
 {
 	return EOPNOTSUPP;
@@ -518,6 +530,9 @@ const struct verbs_context_ops verbs_dummy_ops = {
 	req_notify_cq,
 	rereg_mr,
 	resize_cq,
+
+	dump_context,
+	restore_object,
 };
 
 /*
@@ -607,6 +622,8 @@ void verbs_set_ops(struct verbs_context *vctx,
 	SET_OP(vctx, destroy_wq);
 	SET_PRIV_OP(ctx, detach_mcast);
 	SET_PRIV_OP_IC(ctx, free_context);
+	SET_PRIV_OP(ctx, dump_context);
+	SET_PRIV_OP(ctx, restore_object);
 	SET_OP(vctx, free_dm);
 	SET_OP(vctx, get_srq_num);
 	SET_OP(vctx, modify_cq);

@@ -276,6 +276,27 @@ int ibv_cmd_alloc_pd(struct ibv_context *context, struct ibv_pd *pd,
 	return 0;
 }
 
+int ibv_cmd_dump_context(struct ibv_context *context,
+                         struct ibv_dump_context *cmd, size_t cmd_size,
+                         struct ib_uverbs_dump_context_resp *resp, size_t resp_size)
+{
+	int ret;
+
+	ret = execute_cmd_write(context, IB_USER_VERBS_CMD_DUMP_CONTEXT,
+				cmd, cmd_size, resp, resp_size);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+int ibv_cmd_restore_object(struct ibv_context *context,
+                           struct ibv_restore_object *cmd, size_t cmd_size)
+{
+	return execute_cmd_write_req(context, IB_USER_VERBS_CMD_RESTORE_OBJECT,
+				     cmd, cmd_size);
+}
+
 int ibv_cmd_open_xrcd(struct ibv_context *context, struct verbs_xrcd *xrcd,
 		      int vxrcd_size,
 		      struct ibv_xrcd_init_attr *attr,
