@@ -1012,8 +1012,11 @@ int ibv_resolve_eth_l2_from_gid(struct ibv_context *context,
 
 	if (oif > 0)
 		neigh_set_oif(&neigh_handler, oif);
-	else
+	else {
+		if (!vid)
+			ret = 0;
 		goto free_resources;
+	}
 
 	ret = -EHOSTUNREACH;
 
