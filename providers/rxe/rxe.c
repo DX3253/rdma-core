@@ -159,6 +159,8 @@ static int rxe_restore_cq(struct ibv_context *context, struct ibv_cq **cq,
 			  int cmd, struct ibv_restore_cq *args, size_t length);
 static int rxe_restore_qp(struct ibv_context *context, struct ibv_qp **qp,
 			  int cmd, void *args, size_t length);
+static int rxe_restore_srq(struct ibv_context *context, struct ibv_srq **srq,
+			   int cmd, void *args, size_t length);
 static int rxe_restore_mr(struct ibv_context *context, struct ibv_mr **mr,
 			  int cmd, struct ibv_restore_mr *args, size_t length);
 
@@ -171,6 +173,8 @@ static int rxe_restore_object(struct ibv_context *context,
 		return rxe_restore_cq(context, (struct ibv_cq **)object, cmd, args, length);
 	case IB_UVERBS_OBJECT_QP:
 		return rxe_restore_qp(context, (struct ibv_qp **)object, cmd, args, length);
+	case IB_UVERBS_OBJECT_SRQ:
+		return rxe_restore_srq(context, (struct ibv_srq **)object, cmd, args, length);
         case IB_UVERBS_OBJECT_MR:
 		return rxe_restore_mr(context, (struct ibv_mr **)object, cmd, args, length);
 	default:
@@ -744,6 +748,92 @@ static int rxe_restore_qp(struct ibv_context *context,  struct ibv_qp **qp,
 		return rxe_restore_qp_create(context, qp, args, length);
 	case IBV_RESTORE_QP_REFILL:
 		return rxe_restore_qp_refill(context, qp, args, length);
+	default:
+		return -EINVAL;
+	}
+}
+
+static int rxe_restore_srq_create(struct ibv_context *context, struct ibv_srq **srq,
+				  struct ibv_restore_srq *args, size_t length)
+{
+	struct ibv_create_srq cmd;
+	struct urxe_create_srq_resp resp;
+	struct rxe_srq *rsrq;
+	int ret;
+
+	rsrq = malloc(sizeof *rsrq);
+	if (!rsrq) {
+		return -1;
+	}
+
+	ret = ibv_cmd_create_srq(args->pd, &rsrq->ibv_srq, &args->attr, &cmd, sizeof cmd,
+				 &resp.ibv_resp, sizeof resp);
+	if (ret) {
+		goto out_err1;
+	}
+
+	if (args->queue.vm_size != resp.mi.size) {
+		goto out_err1;
+	}
+
+	rsrq->rq.queue = mmap((void *)args->queue.vm_start, args->queue.vm_size,
+			     PROT_READ | PROT_WRITE, MAP_SHARED,
+			     args->pd->context->cmd_fd, resp.mi.offset);
+	if ((void *)rsrq->rq.queue == MAP_FAILED) {
+		goto out_err2;
+		return -1;
+	}
+
+	rsrq->mmap_info = resp.mi;
+	rsrq->rq.max_sge = args->attr.attr.max_sge;
+	pthread_spin_init(&rsrq->rq.lock, PTHREAD_PROCESS_PRIVATE);
+
+	*srq = &rsrq->ibv_srq;
+	return 0;
+
+  out_err2:
+	ibv_cmd_destroy_srq(&rsrq->ibv_srq);
+  out_err1:
+	free(rsrq);
+	return -1;
+}
+
+static int rxe_restore_srq_refill(struct ibv_context *context, struct ibv_srq **srq,
+				 struct ibv_restore_srq *args, size_t length)
+{
+	int ret;
+	struct ibv_restore_object *cmd = NULL;
+	size_t cmd_len = sizeof(*cmd) + length;
+
+	cmd = malloc(cmd_len);
+	if (!cmd) {
+		return -ENOMEM;
+	}
+
+	cmd->core_payload = (struct ib_uverbs_restore_object){
+		.handle = (*srq)->handle,
+		.object_type = IB_UVERBS_OBJECT_SRQ,
+		.cmd = IBV_RESTORE_SRQ_REFILL,
+	};
+
+	memmove(&cmd->driver_data, args, length);
+
+	ret = ibv_cmd_restore_object(context, cmd, cmd_len);
+
+	printf("SRQ REFILL %d len %ld %ld\n", ret, cmd_len, sizeof(*cmd));
+	free(cmd);
+
+	return ret;
+}
+
+static int rxe_restore_srq(struct ibv_context *context,  struct ibv_srq **srq,
+			  int cmd, void *args, size_t length)
+{
+	switch (cmd) {
+	case IBV_RESTORE_SRQ_CREATE:
+		return rxe_restore_srq_create(context, srq, args, length);
+	case IBV_RESTORE_SRQ_REFILL:
+		return rxe_restore_srq_refill(context, srq, args, length);
 	default:
 		return -EINVAL;
 	}

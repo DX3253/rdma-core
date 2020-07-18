@@ -228,6 +228,8 @@ enum ib_uverbs_objects_types {
 };
 
 struct rxe_dump_queue {
+	__u64 start;
+	__u64 size;
 	__u32	log2_elem_size;
 	__u32	index_mask;
 	__u32	producer_index;
@@ -282,8 +284,6 @@ struct ib_uverbs_dump_object_cq {
 	struct ib_uverbs_dump_object obj;
 
 	/* Set by driver specific code */
-	__u64 vm_start;
-	__u64 vm_size;
 	__u32 comp_vector;
 
 	/* Set by generic code */
@@ -398,13 +398,6 @@ struct ib_qp_dump_attr {
 struct ib_uverbs_dump_object_qp {
 	struct ib_uverbs_dump_object obj;
 
-	/* Set by driver specific code */
-	__u64 rq_start;
-	__u64 rq_size;
-
-	__u64 sq_start;
-	__u64 sq_size;
-
 	/* Set by generic code */
 	__u32 pd_handle;
 	__u32 scq_handle;
@@ -425,5 +418,22 @@ struct ib_uverbs_dump_object_ah {
 
 	__u32 pd_handle;
 	struct ib_uverbs_ah_attr attr;
+} __attribute__((packed));
+
+struct ib_uverbs_dump_object_srq {
+	struct ib_uverbs_dump_object obj;
+
+	__u32 pd_handle;
+	__u32 cq_handle;
+	__u32	max_wr;
+	__u32	max_sge;
+	__u32	srq_limit;
+
+	__u32 srq_type;
+	struct rxe_dump_queue	queue;
+} __attribute__((packed));
+
+struct ib_uverbs_dump_object_comp_channel {
+	struct ib_uverbs_dump_object obj;
 } __attribute__((packed));
 #endif

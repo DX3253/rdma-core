@@ -1265,6 +1265,18 @@ struct ibv_restore_qp {
 	struct vm_range 	sq;
 };
 
+enum ibv_restore_srq_cmd {
+	IBV_RESTORE_SRQ_CREATE,
+	IBV_RESTORE_SRQ_REFILL,
+};
+
+struct ibv_restore_srq {
+	/* In arguments */
+	struct ibv_pd		*pd;
+	struct ibv_srq_init_attr	attr;
+	struct vm_range 	queue;
+};
+
 enum ibv_restore_mr_cmd {
 	IBV_RESTORE_MR_KEYS,
 };
