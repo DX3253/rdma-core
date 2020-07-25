@@ -175,4 +175,8 @@ struct rxe_modify_srq_cmd {
 	__aligned_u64 mmap_info_addr;
 };
 
+enum rxe_dump_device_param {
+	RXE_DUMP_MAX_SGE = 32,
+};
+
 #endif /* RDMA_USER_RXE_H */

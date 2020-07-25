@@ -245,6 +245,9 @@ struct rxe_dump_qp {
 	__u32			comp_opcode;
 	__u32			msn;
 	__u32			resp_opcode;
+	__u16			srq_wqe_offset;
+	__u16			srq_wqe_size;
+	__u8			data[0];
 } __attribute__((packed));
 
 struct ib_uverbs_dump_object {
