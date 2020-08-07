@@ -292,6 +292,15 @@ struct ib_uverbs_dump_object_cq {
 	/* Set by generic code */
 	__u32 cqe;
 	__u32 comp_channel;
+	__u32 comp_events_reported;
+	__u32 async_events_reported;
+
+	struct rxe_dump_queue rxe;
+} __attribute__((packed));
+
+struct ib_uverbs_restore_object_cq_refill {
+	__u32 comp_events_reported;
+	__u32 async_events_reported;
 
 	struct rxe_dump_queue rxe;
 } __attribute__((packed));
