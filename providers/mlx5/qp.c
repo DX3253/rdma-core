@@ -1151,6 +1151,9 @@ out:
 int mlx5_post_send(struct ibv_qp *ibqp, struct ibv_send_wr *wr,
 		   struct ibv_send_wr **bad_wr)
 {
+#ifdef OS_ONPATH
+	return ibv_cmd_post_send(ibqp, wr, bad_wr);
+#endif
 #ifdef MW_DEBUG
 	if (wr->opcode == IBV_WR_BIND_MW) {
 		if (wr->bind_mw.mw->type == IBV_MW_TYPE_1)

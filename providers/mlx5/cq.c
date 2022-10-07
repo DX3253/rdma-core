@@ -1001,6 +1001,10 @@ static inline int poll_cq(struct ibv_cq *ibcq, int ne,
 static inline int poll_cq(struct ibv_cq *ibcq, int ne,
 		      struct ibv_wc *wc, int cqe_ver)
 {
+#ifdef OS_ONPATH
+	return ibv_cmd_poll_cq(ibcq, ne, wc);
+#endif
+
 	struct mlx5_cq *cq = to_mcq(ibcq);
 	struct mlx5_resource *rsc = NULL;
 	struct mlx5_srq *srq = NULL;

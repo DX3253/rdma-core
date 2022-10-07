@@ -10,6 +10,12 @@ if (MLX5_MW_DEBUG)
   add_definitions("-DMW_DEBUG")
 endif()
 
+set(MLX5_OS_ONPATH "FALSE" CACHE BOOL
+  "Enable OS on-path interposition")
+if (MLX5_OS_ONPATH)
+  add_definitions("-DOS_ONPATH")
+endif()
+
 rdma_shared_provider(mlx5 libmlx5.map
   1 1.24.${PACKAGE_VERSION}
   buf.c
