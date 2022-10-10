@@ -1731,6 +1731,9 @@ int mlx5_cq_fill_pfns(struct mlx5_cq *cq,
 
 int mlx5_arm_cq(struct ibv_cq *ibvcq, int solicited)
 {
+#ifdef OS_ONPATH
+	return ibv_cmd_req_notify_cq(ibvcq, solicited);
+#endif
 	struct mlx5_cq *cq = to_mcq(ibvcq);
 	struct mlx5_context *ctx = to_mctx(ibvcq->context);
 	uint64_t doorbell;

@@ -3786,6 +3786,9 @@ out:
 int mlx5_post_recv(struct ibv_qp *ibqp, struct ibv_recv_wr *wr,
 		   struct ibv_recv_wr **bad_wr)
 {
+#ifdef OS_ONPATH
+	return ibv_cmd_post_recv(ibqp, wr, bad_wr);
+#endif
 	struct mlx5_qp *qp = to_mqp(ibqp);
 	struct mlx5_wqe_data_seg *scat;
 	int err = 0;
