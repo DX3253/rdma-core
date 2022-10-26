@@ -182,6 +182,8 @@ int mlx5_post_srq_recv(struct ibv_srq *ibsrq,
 	int nreq;
 	int i;
 
+	return ibv_cmd_post_srq_recv(ibsrq, wr, bad_wr);
+
 	mlx5_spin_lock(&srq->lock);
 
 	for (nreq = 0; wr; ++nreq, wr = wr->next) {
