@@ -3217,7 +3217,7 @@ struct ibv_ah *mlx5_create_ah(struct ibv_pd *pd, struct ibv_ah_attr *attr)
 		memcpy(ah->av.rgid, attr->grh.dgid.raw, 16);
 	}
 
-	if (is_eth) {
+	if (true) {
 		if (ctx->cmds_supp_uhw & MLX5_USER_CMDS_SUPP_UHW_CREATE_AH) {
 			struct mlx5_create_ah_resp resp = {};
 
