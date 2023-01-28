@@ -3382,9 +3382,9 @@ static inline int ibv_post_recv(struct ibv_qp *qp, struct ibv_recv_wr *wr,
 	}
 
 	if (buf) {
+		struct ibv_recv_wr *cur_wr = wr;
 		buf->rcv.ops++;
 
-		struct ibv_recv_wr *cur_wr = wr;
 		while (cur_wr) {
 			buf->rcv.wrs++;
 			buf->rcv.sgs += wr->num_sge;
