@@ -35,6 +35,7 @@
 #define _GNU_SOURCE
 #include <config.h>
 
+#include <fcntl.h>
 #include <endian.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -1116,4 +1117,69 @@ int ibv_set_ece(struct ibv_qp *qp, struct ibv_ece *ece)
 int ibv_query_ece(struct ibv_qp *qp, struct ibv_ece *ece)
 {
 	return get_ops(qp->context)->query_ece(qp, ece);
+}
+
+
+enum LOG_INFO
+{
+	LOG_NO=-3,
+	LOG_INIT=-2
+};
+static int log_fd = LOG_INIT; // mark as uninitialise
+static struct trace_buffer buffer;
+
+static void write_trace_buffer(void)
+{
+	dprintf(log_fd,
+	 "Send total: %u\n"
+	 "Send bytes: %u\n"
+	 "Send WRs: %u\n"
+	 "Send SGs: %u\n"
+	 "Receive total: %u\n"
+	 "Receive bytes: %u\n"
+	 "Receive WRs: %u\n"
+	 "Receive SGs: %u\n",
+	  buffer.snd.ops,
+	  buffer.snd.bytes,
+	  buffer.snd.wrs,
+	  buffer.snd.sgs,
+	  buffer.rcv.ops,
+	  buffer.rcv.bytes,
+	  buffer.rcv.wrs,
+	  buffer.rcv.sgs
+	);
+
+	close(log_fd);
+}
+
+struct trace_buffer* get_trace_buffer(void)
+{
+	// no logging
+	if (log_fd == LOG_NO) { return NULL; }
+
+	// initial setup
+	if (log_fd == LOG_INIT) {
+		char const *const log_base = getenv("RDMACORE_TRACE_BASE");
+
+		// no logging
+		if (!log_base) {
+			log_fd = LOG_NO;
+			return NULL;
+		}
+
+		char const *const rank = getenv("OMPI_COMM_WORLD_RANK");
+		char log_path[2048];
+
+		snprintf(log_path, sizeof(log_path), "%s.%s", log_base, rank);
+		log_fd = open(log_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+
+		if (log_fd < 0) {
+			perror("Could not open log file");
+			exit(EXIT_FAILURE);
+		}
+
+		atexit(write_trace_buffer);
+	}
+
+	return &buffer;
 }

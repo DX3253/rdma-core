@@ -3315,6 +3315,24 @@ static inline int ibv_destroy_rwq_ind_table(struct ibv_rwq_ind_table *rwq_ind_ta
 	return vctx->destroy_rwq_ind_table(rwq_ind_table);
 }
 
+
+/*
+ * Trace Helper
+*/
+struct trace_buffer
+{
+	struct
+	{
+		unsigned ops;
+		unsigned wrs;
+		unsigned sgs;
+		unsigned bytes;
+	} snd, rcv;
+};
+
+// returns pointer to trace buffer or NULL if not tracing should take place
+struct trace_buffer* get_trace_buffer(void);
+
 /**
  * ibv_post_send - Post a list of work requests to a send queue.
  *
@@ -3324,6 +3342,29 @@ static inline int ibv_destroy_rwq_ind_table(struct ibv_rwq_ind_table *rwq_ind_ta
 static inline int ibv_post_send(struct ibv_qp *qp, struct ibv_send_wr *wr,
 				struct ibv_send_wr **bad_wr)
 {
+	static struct trace_buffer *buf = (struct trace_buffer*) 0xBEEFBABE;
+
+	if (buf == (void*) 0xBEEFBABE) {
+		// initialise
+		buf = get_trace_buffer();
+	}
+
+	if (buf) {
+		buf->snd.ops++;
+
+		struct ibv_send_wr *cur_wr = wr;
+		while (cur_wr) {
+			buf->snd.wrs++;
+			buf->snd.sgs += wr->num_sge;
+
+			for (size_t cc = 0; cc < wr->num_sge; ++cc) {
+				uint32_t len = (wr->sg_list)[cc].length;
+				buf->snd.bytes += (len ? len : 1<<31);
+			}
+			cur_wr = cur_wr->next;
+		}
+	}
+
 	return qp->context->ops.post_send(qp, wr, bad_wr);
 }
 
@@ -3333,6 +3374,29 @@ static inline int ibv_post_send(struct ibv_qp *qp, struct ibv_send_wr *wr,
 static inline int ibv_post_recv(struct ibv_qp *qp, struct ibv_recv_wr *wr,
 				struct ibv_recv_wr **bad_wr)
 {
+	static struct trace_buffer *buf = (struct trace_buffer*) 0xBEEFBABE;
+
+	if (buf == (void*) 0xBEEFBABE) {
+		// initialise
+		buf = get_trace_buffer();
+	}
+
+	if (buf) {
+		buf->rcv.ops++;
+
+		struct ibv_recv_wr *cur_wr = wr;
+		while (cur_wr) {
+			buf->rcv.wrs++;
+			buf->rcv.sgs += wr->num_sge;
+
+			for (size_t cc = 0; cc < wr->num_sge; ++cc) {
+				uint32_t len = (wr->sg_list)[cc].length;
+				buf->rcv.bytes += (len ? len : 1<<31);
+			}
+			cur_wr = cur_wr->next;
+		}
+	}
+
 	return qp->context->ops.post_recv(qp, wr, bad_wr);
 }
 
